@@ -141,6 +141,7 @@ def receive_data():
     morse = ''
     empty = 0
     temp = 0
+    in_counter = 0
 
     # fs(48000)/chunk_size(1200) = 40
     # -> 1초에 40번 측정, 4번의 측정 데이터로 1unit 측정 가능
