@@ -13,7 +13,7 @@ t = 0.1
 fs = 48000
 f = 523.251  # c5
 chunk_size = 1200
-unit = int(t * fs)
+threshold = 100000000
 
 english = {'A': '.-', 'B': '-...', 'C': '-.-.',
            'D': '-..', 'E': '.', 'F': '..-.',
@@ -94,7 +94,7 @@ def morse2text(morse):
 
 
 def send_data():
-    # text 입력 부분
+    # text 입력 부분, alphanumeric + space
     while True:
         print('Type some text (only English and Number)')
         text = input('User input: ').strip()
@@ -103,7 +103,7 @@ def send_data():
 
     # text를 morse code로 변환한 뒤 화면에 표시
     morse = text2morse(text)
-    print("encoded : " + morse)
+    print("encoded  : " + morse)
 
     # 오디오 재생 부분
     print("playing...")
@@ -115,7 +115,7 @@ def send_data():
 
     audio = morse2audio(morse)  # 오디오로 변환된 morse
 
-    for i in range(0, len(audio), chunk_size):
+    for i in range(0, len(audio), chunk_size):  # 청크 사이즈 마다 잘라서 재생
         chunk = audio[i:i + chunk_size]
         stream.write(struct.pack('<' + ('l' * len(chunk)), *chunk))
 
@@ -129,6 +129,7 @@ def send_data():
 
 
 def receive_data():
+    # 준비 부분
     print("listening...")
 
     p = pyaudio.PyAudio()
@@ -140,38 +141,50 @@ def receive_data():
     morse = ''
     empty = 0
     temp = 0
-    while True:
-        data = struct.unpack('<' + ('l' * chunk_size), stream.read(chunk_size))
-        if statistics.stdev(data) > 100000000:
-            for _ in range(0, math.ceil((fs / chunk_size) * t) - 1):
-                data = struct.unpack('<' + ('l' * chunk_size), stream.read(chunk_size))
-            morse += '.'
-            break
 
+    # fs(48000)/chunk_size(1200) = 40
+    # -> 1초에 40번 측정, 4번의 측정 데이터로 1unit 측정 가능
+
+    # 녹음 시작, threshold가 넘어건 소리가 1unit 이상 측정 될때 탈출.
     while True:
-        for _ in range(0, math.ceil((fs / chunk_size) * t)):
+        data = struct.unpack('<' + ('l' * chunk_size), stream.read(chunk_size))  # 반복 측정
+        if statistics.stdev(data) > threshold:
+            for _ in range(0, math.ceil((fs / chunk_size) * t) - 1):  # 현재 변수 조건에선 3번 반복됨
+                data = struct.unpack('<' + ('l' * chunk_size), stream.read(chunk_size))
+                if statistics.stdev(data) > threshold:
+                    temp += 1
+
+            if temp > 3:  # threshold를 넘어선 소리가 4번 이어질 경우, 1unit '.'으로 판단
+                morse += '.'
+                break
+            else:         # 아닐 경우, 잡음으로 판단하고 계속 대기
+                continue
+
+    # 측정 부분
+    while True:
+        for _ in range(0, math.ceil((fs / chunk_size) * t)):  # 현재 변수 조건에선 4번 반복됨.
             data = struct.unpack('<' + ('l' * chunk_size), stream.read(chunk_size))
-            if statistics.stdev(data) > 100000000:
+            if statistics.stdev(data) > threshold:
                 temp += 1
 
-        if temp > 3:
+        if temp > 3:    # 4번의 측정에서 전부 threshold를 넘겼을 경우, 유효한 신호로 판단
             morse += '.'
             empty = 0
-        else:
+        else:           # 아닐 경우, 공백
             morse += ' '
             empty += 1
 
         print(morse)
         temp = 0
 
-        if empty > 50:
+        if empty > 50:  # 공백이 50이상일 경우 -> 5초이상 무음으로 판단, 녹음 종료
             break
 
     stream.stop_stream()
     stream.close()
     p.terminate()
 
-    morse = morse.strip()
+    morse = morse.strip()   # 양쪽 여백 제거
     morse = morse.replace('...', '-')  # 3 straights to dash
     morse = morse.replace('       ', '#$#')  # temp medium gap (7 units)
     morse = morse.replace('   ', '#')  # temp short gap  (3 units)
@@ -199,7 +212,7 @@ def main():
             receive_data()
         elif select == 'Q':
             print('Terminating...')
-            break;
+            break
 
 
 if __name__ == '__main__':
