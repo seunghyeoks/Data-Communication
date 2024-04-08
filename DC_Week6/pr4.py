@@ -9,6 +9,16 @@ channels = 1
 unit = 0.1
 samplerate = 48000
 
+
+def audio2file(audio_sample, filename):
+    with wave.open(filename, 'wb') as w:
+        w.setnchannels(1)
+        w.setsampwidth(4)
+        w.setframerate(48000)
+        for a in audio_sample:
+            w.writeframes(struct.pack('<l', a))
+
+
 rules = {'START': 512,
          '0': 768,
          '1': 896,
@@ -32,12 +42,12 @@ text = '🧡💛💚💙💜'
 string_hex = text.encode('utf-8').hex().upper()
 
 audio = []
-for i in range(int(unit * samplerate * 2)):
+for i in range(int(unit * samplerate * 2)):  # start signal, 1unit
     audio.append(int(INTMAX * math.sin(2 * math.pi * rules['START'] * i / samplerate)))
-for s in string_hex:
+for s in string_hex:  # text
     for i in range(int(unit * samplerate * 1)):
         audio.append(int(INTMAX * math.sin(2 * math.pi * rules[s] * i / samplerate)))
-for i in range(int(unit * samplerate * 2)):
+for i in range(int(unit * samplerate * 2)):  # end signal, 2unit
     audio.append(int(INTMAX * math.sin(2 * math.pi * rules['END'] * i / samplerate)))
 
 p = pyaudio.PyAudio()
@@ -51,3 +61,5 @@ chunk_size = 1024
 for i in range(0, len(audio), chunk_size):
     chunk = audio[i:i + chunk_size]
     stream.write(struct.pack('<' + ('l' * len(chunk)), *chunk))
+
+audio2file(audio, "sample_week06.wav")

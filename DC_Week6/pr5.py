@@ -28,7 +28,7 @@ rules = {'START': 512,
          'END': 2944}
 
 
-filename = '실습6-example4-fsk.wav'
+filename = 'sample_week06.wav'
 
 print('Raw hex:')
 text = ''

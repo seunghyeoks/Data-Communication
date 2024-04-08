@@ -7,9 +7,11 @@ INTMAX = 2**(32-1)-1
 channels = 1
 length = 5.0
 samplerate = 48000
+waves = []
+
 frequencies = [261.625, 523.251, 1046.502]  # C4, C5, C6
 volumes = [1.0, 0.75, 0.5]
-waves = []
+
 
 for frequency, volume in zip(frequencies, volumes):
     audio = []
@@ -23,7 +25,7 @@ for i in range(len(track)):
         track[i] = track[i] + w[i]
     track[i] = track[i] / len(waves)
 
-# 실제 푸리에 처리 부분
+# 실습2 : 실제 푸리에 처리 부분,
 freq = scipy.fftpack.fftfreq(len(track), d=1/samplerate)
 fourier = scipy.fftpack.fft(track)
 print(freq[np.argmax(abs(fourier))])

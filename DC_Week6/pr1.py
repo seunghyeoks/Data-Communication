@@ -7,9 +7,12 @@ INTMAX = 2 ** (32 - 1) - 1
 channels = 1
 length = 5.0
 samplerate = 48000
+waves = []
+
+# 실습1 : 이부분을 수정하여 다른 신호 발생 가능
 frequencies = [261.625, 523.251, 1046.502]  # C4, C5, C6
 volumes = [1.0, 0.75, 0.5]
-waves = []
+
 
 for frequency, volume in zip(frequencies, volumes):
     audio = []
@@ -30,6 +33,7 @@ stream = p.open(format=pyaudio.paInt32,
                 rate=samplerate,
                 output=True)
 chunk_size = 1024
+
 for i in range(0, len(track), chunk_size):
     chunk = track[i:i + chunk_size]
     stream.write(struct.pack('<' + ('l' * len(chunk)), *chunk))
