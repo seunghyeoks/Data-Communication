@@ -11,7 +11,7 @@ import numpy
 INTMAX = 2 ** (32 - 1) - 1
 unit = 0.1
 samplerate = 48000
-padding = 5
+padding = 10
 chunk_size = 1200
 threshold = 100000000
 
@@ -78,6 +78,7 @@ def receive_data():
                     rate=samplerate,
                     input=True)
     started = False
+    checker = False
     counter = 0
     text = ''
     temp = []
@@ -92,6 +93,9 @@ def receive_data():
         for k, v in rules.items():
             if v - padding <= top <= v + padding:
                 data = k
+
+        if len(data) > 6:
+            data = '$'
 
         # print(top)
 
@@ -110,10 +114,11 @@ def receive_data():
 
         if started:
             counter += 1
+            temp.append(data)
             if counter != 4:
-                temp.append(data)
                 continue
             else:
+                temp.reverse()
                 data = max(set(temp), key=temp.count)
                 temp.clear()
                 counter = 0
@@ -122,6 +127,7 @@ def receive_data():
                 print("[END] " + data)
                 break
             if data != 'START' and data != 'END':
+                #print(data)
                 text += data
                 print("[DATA] " + text)
             if data == 'START':
