@@ -5,6 +5,8 @@ import time
 import wave
 
 import pyaudio
+import scipy.fftpack
+import numpy
 
 INTMAX = 2 ** (32 - 1) - 1
 unit = 0.1
@@ -13,24 +15,24 @@ padding = 5
 chunk_size = 1200
 threshold = 100000000
 
-rules = {'START': 512,
-         '0': 768,
-         '1': 896,
-         '2': 1024,
-         '3': 1152,
-         '4': 1280,
-         '5': 1408,
-         '6': 1536,
-         '7': 1664,
-         '8': 1792,
-         '9': 1920,
-         'A': 2048,
-         'B': 2176,
-         'C': 2304,
-         'D': 2432,
-         'E': 2560,
-         'F': 2688,
-         'END': 2944}
+rules = {'START': 520,
+         '0': 760,
+         '1': 880,
+         '2': 1000,
+         '3': 1120,
+         '4': 1240,
+         '5': 1360,
+         '6': 1480,
+         '7': 1600,
+         '8': 1720,
+         '9': 1840,
+         'A': 1960,
+         'B': 2080,
+         'C': 2200,
+         'D': 2320,
+         'E': 2440,
+         'F': 2560,
+         'END': 2800}
 
 
 def send_data():
@@ -68,18 +70,70 @@ def send_data():
 
 
 def receive_data():
-
-    print("\nlistening...")
+    print("\nlistening...\n")
 
     p = pyaudio.PyAudio()
     stream = p.open(format=pyaudio.paInt32,
                     channels=1,
                     rate=samplerate,
                     input=True)
+    started = False
+    counter = 0
+    text = ''
+    temp = []
 
     while True:
         data = struct.unpack('<' + ('l' * chunk_size), stream.read(chunk_size))  # 반복 측정
 
+        freq = scipy.fftpack.fftfreq(len(data), d=1 / samplerate)
+        fourier = scipy.fftpack.fft(data)
+        top = freq[numpy.argmax(abs(fourier))]  # 가장 큰 진폭의 주파수을 가져오기 위해 -> 입력된 주파수
+
+        for k, v in rules.items():
+            if v - padding <= top <= v + padding:
+                data = k
+
+        # print(top)
+
+        if not started:
+            if data == 'START':
+                counter += 1
+            else:
+                counter = 0
+
+            if counter == 8:
+                started = True
+                counter = 0
+                print("[START] " + data)
+
+            continue
+
+        if started:
+            counter += 1
+            if counter != 4:
+                temp.append(data)
+                continue
+            else:
+                data = max(set(temp), key=temp.count)
+                temp.clear()
+                counter = 0
+
+            if data == 'END':
+                print("[END] " + data)
+                break
+            if data != 'START' and data != 'END':
+                text += data
+                print("[DATA] " + text)
+            if data == 'START':
+                print("[START] " + data)
+
+    print()
+    print(f'Decoded: {bytes.fromhex(text).decode("utf-8")}')
+    print()
+
+    stream.stop_stream()
+    stream.close()
+    p.terminate()
 
     pass
 
