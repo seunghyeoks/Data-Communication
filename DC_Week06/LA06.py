@@ -124,7 +124,7 @@ def receive_data():
 
             continue
 
-        # 입력돤 데이터 실시간 해석 단계
+        # 입력된 데이터 실시간 해석 단계
         if started:
             counter += 1
             temp.append(data)  # 각 data를 temp에 저장
