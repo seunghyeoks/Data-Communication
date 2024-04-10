@@ -13,6 +13,7 @@ t = 0.1  # 타이밍
 samplerate = 48000
 padding = 10
 chunk_size = 1200  # 청크 사이즈
+threshold = 80000000  # 인식 기준 threshold
 unit_counter = t * samplerate / chunk_size  # 1unit 측정에 필요한 횟수 = 4
 
 # 주파수별 변환코드, 측정 환경에 맞게 새팅
@@ -95,6 +96,8 @@ def receive_data():
 
     while True:
         data = struct.unpack('<' + ('l' * chunk_size), stream.read(chunk_size))  # 청크 만큼 측정
+        if statistics.stdev(data) < threshold:
+            continue
 
         freq = scipy.fftpack.fftfreq(len(data), d=1 / samplerate)
         fourier = scipy.fftpack.fft(data)
