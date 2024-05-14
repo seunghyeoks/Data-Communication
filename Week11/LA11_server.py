@@ -1,9 +1,9 @@
 import socket
+import random
 
 FLAGS = _ = None
 DEBUG = False
 
-numbers = list(range(1, 46))
 
 def main():
     if DEBUG:
@@ -15,11 +15,27 @@ def main():
     print(f'Listening on {sock}')
 
     while True:
-        data, client = sock.recvfrom(2**16)
-        data = data.decode('utf-8')
+        numbers = list(range(1, 46))
+        data, client = sock.recvfrom(2 ** 16)
+        data = data.decode('utf-8').strip().split()
+        temp = []
         print(f'Received {data} from {client}')
-        sock.sendto(data.encode('utf-8'), client)
-        print(f'Send {data} to {client}')
+
+        for k in data:
+            temp.append(int(k))
+            numbers.remove(int(k))
+
+        temp2 = random.sample(numbers, 6 - len(data))
+        for t in temp2:
+            print("auto picked : " + str(t))
+
+        result = temp + temp2
+        result.sort()
+        string_list = [str(num) for num in result]
+        result = ' '.join(string_list)
+
+        sock.sendto(result.encode('utf-8'), client)
+        print(f'Send {result} to {client}')
 
 
 if __name__ == '__main__':
@@ -37,5 +53,3 @@ if __name__ == '__main__':
     DEBUG = FLAGS.debug
 
     main()
-
-

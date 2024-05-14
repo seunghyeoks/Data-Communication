@@ -1,5 +1,4 @@
 import socket
-import random
 
 FLAGS = _ = None
 DEBUG = False
@@ -14,22 +13,7 @@ def main():
     print(f'Ready to send using {sock}')
 
     while True:
-        numbers = list(range(1, 46))
-        data = input('Data: ').strip().split()
-        temp2 = []
-
-        for k in data:
-            temp2.append(int(k))
-            numbers.remove(int(k))
-
-        temp = random.sample(numbers, 6 - len(data))
-        for t in temp:
-            print("auto picked : " + str(t))
-        data = temp2 + temp
-        data.sort()
-        string_list = [str(num) for num in data]
-        data = ' '.join(string_list)
-
+        data = input('Data: ').strip()
         sock.sendto(data.encode('utf-8'), (FLAGS.address, FLAGS.port))
         print(f'Send {data} to ({FLAGS.address}, {FLAGS.port})')
         data, server = sock.recvfrom(2**16)
