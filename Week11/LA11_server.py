@@ -21,14 +21,17 @@ def main():
         temp = []
         print(f'Received {data} from {client}')
 
+        # 입력 데이터 처리
         for k in data:
             temp.append(int(k))
             numbers.remove(int(k))
 
+        # 랜덤 선택 처리
         temp2 = random.sample(numbers, 6 - len(data))
         for t in temp2:
             print("auto picked : " + str(t))
 
+        # 병합 및 변환
         result = temp + temp2
         result.sort()
         string_list = [str(num) for num in result]
