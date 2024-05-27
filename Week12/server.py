@@ -4,7 +4,6 @@ import os
 FLAGS = _ = None
 DEBUG = False
 
-# default local address
 ipaddress = '127.0.0.1'
 port = 3034
 
@@ -32,14 +31,14 @@ def main():
 
             if not os.path.isfile(filename):
                 sock.sendto("404 Not Found".encode('utf-8'), client)
-                print(f'Send info {file_size} to {client}')
+                print(f'[404] {data[1]} Not Found\n')
                 continue
 
             # 파일 사이즈 전송
             if command == 'INFO':
                 file_size = os.path.getsize(filename)
                 sock.sendto(str(file_size).encode('utf-8'), client)
-                print(f'[404] {data[1]} Not Found\n')
+                print(f'Send info {file_size} to {client}')
 
             # 파일 전송
             if command == 'DOWNLOAD':

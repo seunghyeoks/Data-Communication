@@ -2,7 +2,7 @@ import socket
 
 FLAGS = _ = None
 DEBUG = False
-
+# ipaddress = '127.0.0.1
 ipaddress = '172.16.98.134'
 port = 3034
 chunk_maxsize = 1500
