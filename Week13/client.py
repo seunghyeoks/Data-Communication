@@ -4,8 +4,7 @@ import struct
 FLAGS = _ = None
 DEBUG = False
 
-# ipaddress = 'localhost'
-ipaddress = '34.168.194.7'
+ipaddress = '34.168.194.7'  # 'localhost' or '172.16.98.134'
 port = 3034
 chunk_maxsize = 2 ** 16
 
@@ -14,12 +13,12 @@ def calculate_checksum(data):
     checksum = 0
 
     if len(data) % 2 == 1:
-        data += b'\x00'  # 데이터 길이가 홀수인 경우 패딩 바이트 추가
+        data = data[:-1] + b'\x00' + data[-1:]
 
     for i in range(0, len(data), 2):
-        word = (data[i] << 8) + data[i + 1]  # 16비트 만큼 자른 뒤 얻기
+        word = (data[i] << 8) + data[i + 1]  # 16비트 만큼 자르기
         checksum += word
-        checksum = (checksum & 0xffff) + (checksum >> 16)  # 오버플로우 처리, 기본 16자리 + 오버플로우 1
+        checksum = (checksum & 0xffff) + (checksum >> 16)  # 오버플로우 처리, 기본 16비트 + 오버플로우 값
 
     checksum = ~checksum & 0xffff  # 1의 보수 취하기, 16이후는 0으로
     return checksum
@@ -70,15 +69,17 @@ def main():
                         sock.sendto(struct.pack('>H', (seq + 1) % 2), (FLAGS.address, FLAGS.port))
                         continue
 
-                    #print(calculate_checksum(chunk[4:]))  # 데이터만으로 계산해낸 체크섬
-                    #print(struct.unpack('>H', chunk[2:4])[0]) # 입력된 값의 체크섬 부분 추출 및 정수화
-                    #print(calculate_checksum(struct.pack('>H', calculate_checksum(chunk[4:])) + chunk[4:]))  # 함수 확인용 1
-                    #print(calculate_checksum(struct.pack('>H', calculate_checksum(b'\x00\x00\x00\x01')) + b'\x00\x01'))  # 함수 확인용 2
+                    # print(calculate_checksum(chunk[4:]))  # 데이터만으로 계산해낸 체크섬
+                    # print(struct.unpack('>H', chunk[2:4])[0]) # 입력된 값의 체크섬 부분 추출 및 정수화
+                    # print(calculate_checksum(struct.pack('>H', calculate_checksum(chunk[4:])) + chunk[4:]))  # 함수 확인용 1
+                    # print(calculate_checksum(struct.pack('>H', calculate_checksum(b'\x00\x00\x00\x01')) + b'\x00\x01'))  # 함수 확인용 2
+                    # print(calculate_checksum(struct.pack('>H', calculate_checksum(b'\x00\x00\xac\xd1\x14')) + b'\xac\xd1\x14'))  #  함수 확인용 3
 
                     # checksum 확인
                     checksum = calculate_checksum(chunk[2:])
-                    if checksum == 0:
-                        print(f'[FAIL] invalid Checksum received. RETRY')
+                    if checksum != 0:
+                        print(f'[FAIL] invalid Checksum {checksum} received. RETRY')
+                        sock.sendto(struct.pack('>H', seq), (FLAGS.address, FLAGS.port))
                         continue
 
                     # data 저장
@@ -95,7 +96,7 @@ def main():
             print(f'[SUCCESS] {filename} download SUCCESS\n')
 
         except socket.timeout:
-            print(f'[Timed out] loss size {remain}\n')
+            print(f'[Timed out] lost size {remain}\n')
             continue
 
         except KeyboardInterrupt:
