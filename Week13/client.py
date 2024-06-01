@@ -12,6 +12,7 @@ chunk_maxsize = 2 ** 16
 def calculate_checksum(data):
     checksum = 0
 
+    # 데이터의 길이가 홀수인 경우, 마지막에 바이트 앞에 값이 0인 바이트 추가
     if len(data) % 2 == 1:
         data = data[:-1] + b'\x00' + data[-1:]
 
@@ -24,17 +25,19 @@ def calculate_checksum(data):
     return checksum
 
 
+
 def main():
     if DEBUG:
         print(f'Parsed arguments {FLAGS}')
         print(f'Unparsed arguments {_}')
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(4.0)
+    sock.settimeout(7.0)
     print(f'Ready to send using {sock}')
 
     while True:
         remain = 0
+        filename = ""
         try:
             filename = input('Filename: ').strip()
             request = f'INFO {filename}'
@@ -54,38 +57,29 @@ def main():
             remain = size
             prevseq = 1
             with open(filename, 'wb') as f:
-                while remain > 0:
+                while remain >= 0:
                     chunk, server = sock.recvfrom(FLAGS.chunk_maxsize)
 
-                    # data가 비어있을 경우, 종료
-                    chunk_size = len(chunk[4:])
-                    if chunk_size == 0:
-                        break
-
-                    # seq 확인
+                    # seq 확인, H: unsigned Short
                     seq = struct.unpack('>H', chunk[:2])[0]
                     if prevseq == seq:
-                        print(f'[FAIL] invalid Seq received. RETRY')
+                        print(f'[FAIL] invalid Seq {seq} received. RETRY')
+                        # 이전에 보낸 응답이 누락, 이전 seq로 다시 응답
                         sock.sendto(struct.pack('>H', (seq + 1) % 2), (FLAGS.address, FLAGS.port))
                         continue
-
-                    # print(calculate_checksum(chunk[4:]))  # 데이터만으로 계산해낸 체크섬
-                    # print(struct.unpack('>H', chunk[2:4])[0]) # 입력된 값의 체크섬 부분 추출 및 정수화
-                    # print(calculate_checksum(struct.pack('>H', calculate_checksum(chunk[4:])) + chunk[4:]))  # 함수 확인용 1
-                    # print(calculate_checksum(struct.pack('>H', calculate_checksum(b'\x00\x00\x00\x01')) + b'\x00\x01'))  # 함수 확인용 2
-                    # print(calculate_checksum(struct.pack('>H', calculate_checksum(b'\x00\x00\xac\xd1\x14')) + b'\xac\xd1\x14'))  #  함수 확인용 3
 
                     # checksum 확인
                     checksum = calculate_checksum(chunk[2:])
                     if checksum != 0:
                         print(f'[FAIL] invalid Checksum {checksum} received. RETRY')
+                        # 받은 데이터의 오염, 이번 seq를 다시 보내 재전송 요청
                         sock.sendto(struct.pack('>H', seq), (FLAGS.address, FLAGS.port))
                         continue
 
-                    # data 저장
+                    # data 저장 및 서버에 응답
                     data = chunk[4:]
                     remain -= len(data)
-                    print(f'[pass] Seq:{seq}\tChecksum:{checksum}\tProgress:{size - remain}/{size}')
+                    print(f'[pass] Seq:{seq}\tChecksum:{checksum}\t  Progress:{size - remain}/{size}')
 
                     f.write(data)
                     prevseq = seq
@@ -93,10 +87,13 @@ def main():
 
                     if DEBUG:
                         print("receive from server")
-            print(f'[SUCCESS] {filename} download SUCCESS\n')
+
 
         except socket.timeout:
-            print(f'[Timed out] lost size {remain}\n')
+            if (remain != 0) | (filename == ""):
+                print(f'[Timed out] lost size {remain}\n')
+            else:
+                print(f'[SUCCESS] {filename} download SUCCESS\n')
             continue
 
         except KeyboardInterrupt:
