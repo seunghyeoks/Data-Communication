@@ -1,30 +1,13 @@
 import socket
-import struct
 import os
 
 FLAGS = _ = None
 DEBUG = False
 
-ipaddress = '34.168.194.7'  # 'localhost' or '172.16.98.134'
+ipaddress = '127.0.0.1'
 port = 3034
-chunk_maxsize = 1500
 
-
-def calculate_checksum(data):
-    checksum = 0
-
-    # 데이터의 길이가 홀수인 경우, 마지막에 바이트 앞에 값이 0인 바이트 추가
-    if len(data) % 2 == 1:
-        data = data[:-1] + b'\x00' + data[-1:]
-
-    for i in range(0, len(data), 2):
-        word = (data[i] << 8) + data[i + 1]  # 16비트 만큼 자르기
-        checksum += word
-        checksum = (checksum & 0xffff) + (checksum >> 16)  # 오버플로우 처리, 기본 16비트 + 오버플로우 값
-
-    checksum = ~checksum & 0xffff  # 1의 보수 취하기, 16이후는 0으로
-    return checksum
-
+chunk_size = 1500
 
 
 def main():
@@ -34,11 +17,7 @@ def main():
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((FLAGS.address, FLAGS.port))
-    sock.settimeout(3.0)
     print(f'Listening on {sock}')
-
-    remain = 0
-    filename = ""
 
     while True:
         try:
@@ -48,7 +27,7 @@ def main():
 
             # file 검색
             command = str(data[0]).upper()
-            filename = "./store/" + data[1]
+            filename = data[1]
 
             if not os.path.isfile(filename):
                 sock.sendto("404 Not Found".encode('utf-8'), client)
@@ -67,33 +46,16 @@ def main():
                 remain = file_size
                 current = 0
 
-                prevseq = 0
-                block_size = chunk_maxsize - 4
-
                 with open(filename, 'rb') as f:
-                    while remain >= 0:
-                        block = f.read(block_size)
-
-                        seq = struct.pack('>H', seq)[0]
-
+                    while remain > 0:
+                        block = f.read(chunk_size)
                         sock.sendto(block, client)
-                        print(f'Send block {int(current / chunk_maxsize)} to {client}')
-                        remain -= chunk_maxsize
-                        current += chunk_maxsize
-
-                        if DEBUG:
-                            print("receive from server")
+                        print(f'Send block {int(current / chunk_size)} to {client}')
+                        remain -= chunk_size
+                        current += chunk_size
                     print(f'[FINISHED] {data[1]} transfer\n')
-
-        except socket.timeout:
-            if remain != 0:
-                print(f'[Timed out] lost size {remain}\n')
-            else:
-                print(f'[SUCCESS] {filename} download SUCCESS\n')
-            continue
-
         except KeyboardInterrupt:
-            print(f'[Shutting down] {sock}')
+            print(f'Shutting down... {sock}')
             break
 
 
@@ -104,7 +66,6 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--address', type=str, default=ipaddress)
     parser.add_argument('--port', type=int, default=port)
-    parser.add_argument('--chunk_maxsize', type=int, default=chunk_maxsize)
 
     FLAGS, _ = parser.parse_known_args()
     DEBUG = FLAGS.debug

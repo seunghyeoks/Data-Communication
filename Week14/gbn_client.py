@@ -1,10 +1,11 @@
 import socket
 import struct
+import time
 
 FLAGS = _ = None
 DEBUG = False
 
-ipaddress = '34.168.194.7'  # 'localhost' or '172.16.98.134'
+ipaddress = '172.16.98.134'  # 'localhost' or '172.16.98.134'
 port = 3034
 chunk_maxsize = 1500
 
@@ -32,12 +33,13 @@ def main():
         print(f'Unparsed arguments {_}')
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(7.0)
+    sock.settimeout(10.0)
     print(f'Ready to send using {sock}')
 
     while True:
         remain = 0
         filename = ""
+        size = 0
         try:
             filename = input('Filename: ').strip()
             request = f'INFO {filename}'
@@ -57,6 +59,7 @@ def main():
             remain = size
             recentseq = 15
             with open(filename, 'wb') as f:
+                stime = time.time()
                 while remain >= 0:
                     chunk, server = sock.recvfrom(FLAGS.chunk_maxsize)
 
@@ -82,8 +85,8 @@ def main():
                     print(f'[pass] Seq:{seq}\tChecksum:{checksum}\t  Progress:{size - remain}/{size}')
 
                     f.write(data)
-                    recentseq = (seq+1) % 16
-                    sock.sendto(struct.pack('>H', recentseq), (FLAGS.address, FLAGS.port))
+                    recentseq = seq
+                    sock.sendto(struct.pack('>H', (recentseq+1) % 16), (FLAGS.address, FLAGS.port))
 
                     if DEBUG:
                         print("receive from server")
@@ -93,7 +96,9 @@ def main():
             if (remain != 0) | (filename == ""):
                 print(f'[Timed out] lost size {remain}\n')
             else:
-                print(f'[SUCCESS] {filename} download SUCCESS\n')
+                etime = time.time()
+                print(f'\n[SUCCESS] {filename} download SUCCESS')
+                print(f'> Throughput: {round((size * 8) / ((etime - stime) / 2)):,d} bps\n')
             continue
 
         except KeyboardInterrupt:
