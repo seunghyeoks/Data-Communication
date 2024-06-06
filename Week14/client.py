@@ -6,7 +6,7 @@ DEBUG = False
 
 ipaddress = '34.168.194.7'  # 'localhost' or '172.16.98.134'
 port = 3034
-chunk_maxsize = 2 ** 16
+chunk_maxsize = 1500
 
 
 def calculate_checksum(data):
@@ -55,25 +55,25 @@ def main():
             print(f'[Request] {filename} to ({FLAGS.address}, {FLAGS.port})')
 
             remain = size
-            prevseq = 1
+            recentseq = 15
             with open(filename, 'wb') as f:
                 while remain >= 0:
                     chunk, server = sock.recvfrom(FLAGS.chunk_maxsize)
 
                     # seq 확인, H: unsigned Short
                     seq = struct.unpack('>H', chunk[:2])[0]
-                    if prevseq == seq:
+                    if (recentseq+1) % 16 != seq:
                         print(f'[FAIL] invalid Seq {seq} received. RETRY')
                         # 이전에 보낸 응답이 누락, 이전 seq로 다시 응답
-                        sock.sendto(struct.pack('>H', (seq + 1) % 2), (FLAGS.address, FLAGS.port))
+                        sock.sendto(struct.pack('>H', recentseq), (FLAGS.address, FLAGS.port))
                         continue
 
                     # checksum 확인
-                    checksum = calculate_checksum(chunk[2:])
+                    checksum = calculate_checksum(chunk)
                     if checksum != 0:
                         print(f'[FAIL] invalid Checksum {checksum} received. RETRY')
                         # 받은 데이터의 오염, 이번 seq를 다시 보내 재전송 요청
-                        sock.sendto(struct.pack('>H', seq), (FLAGS.address, FLAGS.port))
+                        sock.sendto(struct.pack('>H', recentseq), (FLAGS.address, FLAGS.port))
                         continue
 
                     # data 저장 및 서버에 응답
@@ -82,8 +82,8 @@ def main():
                     print(f'[pass] Seq:{seq}\tChecksum:{checksum}\t  Progress:{size - remain}/{size}')
 
                     f.write(data)
-                    prevseq = seq
-                    sock.sendto(struct.pack('>H', (seq + 1) % 2), (FLAGS.address, FLAGS.port))
+                    recentseq = (seq+1) % 16
+                    sock.sendto(struct.pack('>H', recentseq), (FLAGS.address, FLAGS.port))
 
                     if DEBUG:
                         print("receive from server")
