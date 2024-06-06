@@ -111,12 +111,12 @@ def main():
                                     print(f'switch to receive mode, remain:{remain}')
 
                             else:
+                                if count != len(file_queue):
+                                    recvseq, client = sock.recvfrom(2)
+                                    seq_queue.append(struct.unpack('>H', recvseq)[0])
 
-                                recvseq, client = sock.recvfrom(2)
-                                seq_queue.append(struct.unpack('>H', recvseq)[0])
-
-                                count += 1
-                                print(f'[receive] count:{count}/{len(file_queue)}, seq:{seq_queue[count-1]}')
+                                    count += 1
+                                    print(f'[receive] count:{count}/{len(file_queue)}, seq:{seq_queue[count-1]}')
 
                                 if count == len(file_queue):
                                     pop_count = 0
@@ -151,9 +151,8 @@ def main():
                                 print(f'[SUCCESS] \n')
                                 break
                             else:
-                                count = 0
+                                count += 1
                                 print(f'time out in 139\n')
-                                send_mode = True
                                 continue
                     print(f'\n[SUCCESS] {filename} send')
                     print(f'ready to listening\n')
