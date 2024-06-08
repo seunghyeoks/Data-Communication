@@ -38,17 +38,16 @@ def main():
     print(f'Ready to send using {sock}')
 
     while True:
-        remain = 0
-        filename = ""
         try:
             data, client = sock.recvfrom(FLAGS.chunk_maxsize)
             data = data.decode('utf-8').strip().split()
             print(f'Received {data} from {client}')
 
-            # file 검색
+            # 명령어와 파일 이름 부분을 분리
             command = str(data[0]).upper()
             filename = data[1]
 
+            # 파일 검색
             if not os.path.isfile(filename):
                 sock.sendto("404 Not Found".encode('utf-8'), client)
                 print(f'[404] {data[1]} Not Found\n')
@@ -66,8 +65,10 @@ def main():
                 remain = file_size
 
                 prevseq = 0
+                stack = 0
 
                 with open(filename, 'rb') as f:
+                    # 첫 패킷 전송, seq는 0으로 설정
                     seq = struct.pack('>H', 0)
                     block = f.read(chunk_maxsize - 4)
                     checksum = struct.pack('>H', calculate_checksum(seq + b'\x00\x00' + block))
@@ -88,12 +89,16 @@ def main():
                                 sock.sendto(send_data, client)
                                 continue
 
-                            if remain == 0:
-                                break
+                            # 답장을 확인 한 후, 남은 전송량을 반영하도록 작성
                             remain -= len(block)
+                            print(f'[Send] Seq:{seq}\tProgress:{file_size - remain}/{file_size}')
 
+                            # 전송할게 없으면 종료 (마지막 패킷에 대한 답장도 이미 받았으므로)
+                            if remain == 0:
+                                print(f'transfer success')
+                                break
 
-                            prevseq = seq % 2
+                            # 다음 패킷 준비 및 전송
                             seq = struct.pack('>H', seq)
                             block = f.read(chunk_maxsize - 4)
                             checksum = struct.pack('>H', calculate_checksum(seq + b'\x00\x00' + block))
@@ -101,21 +106,22 @@ def main():
                             send_data = seq + checksum + block
                             sock.sendto(send_data, client)
 
-                            print(f'[Send] Seq:{seq}\tProgress:{file_size - remain}/{file_size}')
+                            stack = 0
+                            prevseq = seq % 2
 
                         except socket.timeout:
+                            # 클라이언트의 응답이 없는 경우, 이전 패킷 재전송.
                             sock.sendto(send_data, client)
-                            continue
 
-                        if DEBUG:
-                            print("receive from server")
-
-                    if remain == 0:
-                        print(f'transfer success')
-                        continue
-
+                            stack += 1
+                            if stack > 4:   # timer의 4배 기다림 ( 마지막 송수신 누락 대비 )
+                                print(f'holding stack expired')
+                                break
+                            else:
+                                continue
 
         except socket.timeout:
+            # 단순 대기시 timeout 종료 방지
             continue
 
         except KeyboardInterrupt:

@@ -4,7 +4,7 @@ import os
 
 FLAGS = _ = None
 DEBUG = False
-ipaddress = '0.0.0.0'  # 'localhost' or '172.16.98.1'
+ipaddress = 'localhost'  # 'localhost' or '172.16.98.134'
 port = 3034
 chunk_maxsize = 1500
 window_size = 2 ** 4 - 1
@@ -27,8 +27,8 @@ def calculate_checksum(data):
 
 
 def process_queue(f, pop_count, file_queue):
+    # pop count 만큼 pop 및 새로운 data 읽기
     for i in range(pop_count):
-
         prevseq = struct.unpack('>H', file_queue[len(file_queue)-1][:2])[0]
         seq = struct.pack('>H', (prevseq + 1) % 16)
         block = f.read(chunk_maxsize - 4)
@@ -36,6 +36,7 @@ def process_queue(f, pop_count, file_queue):
 
         file_queue.pop(0)
 
+        # data가 비어있을 경우, queue에 불필요한 push 방지
         if len(block) == 0:
             continue
         else:
@@ -62,10 +63,11 @@ def main():
             data = data.decode('utf-8').strip().split()
             print(f'Received {data} from {client}')
 
-            # file 검색
+            # 명령어와 파일 이름 부분을 분리
             command = str(data[0]).upper()
             filename = data[1]
 
+            # 파일 검색
             if not os.path.isfile(filename):
                 sock.sendto("404 Not Found".encode('utf-8'), client)
                 print(f'[404] {data[1]} Not Found\n')
@@ -89,6 +91,7 @@ def main():
                 count = 0
 
                 with open(filename, 'rb') as f:
+                    # 첫번째 전송 준비, window size 만큼 패킷을 큐에 집어넣음
                     for i in range(window_size):
                         seq = struct.pack('>H', i)
                         block = f.read(chunk_maxsize - 4)
@@ -99,18 +102,22 @@ def main():
                     while remain > 0:
                         try:
                             if send_mode:
+                                # 전송 작업 수행, 파일 큐에 있는 데이터 모두 send
                                 sock.sendto(file_queue[count], client)
                                 tseq = struct.unpack('>H', file_queue[count][:2])[0]
 
                                 count += 1
                                 print(f'[send] count:{count}/{len(file_queue)}, seq:{tseq}')
 
+                                # 전송을 다 했을 경우, count 초기화 및 수신 작업으로 전환
                                 if count == len(file_queue):
                                     count = 0
                                     send_mode = False
                                     print(f'switch to receive mode, remain:{remain}')
 
                             else:
+                                # 수신 작업 수행, 클라이언트가 보내는 응답 수신
+                                # sequence용 큐에 응답 seq 저장
                                 if count != len(file_queue):
                                     recvseq, client = sock.recvfrom(2)
                                     seq_queue.append(struct.unpack('>H', recvseq)[0])
@@ -118,41 +125,47 @@ def main():
                                     count += 1
                                     print(f'[receive] count:{count}/{len(file_queue)}, seq:{seq_queue[count-1]}')
 
+                                # 응답이 모두 들어온 경우
                                 if count == len(file_queue):
                                     pop_count = 0
 
+                                    # 누락된 패킷이 있는지 검사
+                                    # 서버에서 보낸 첫번째 패킷의 seq+1이 존재 하는지 확인(=target)
                                     firstseq = struct.unpack('>H', file_queue[0][:2])[0]
                                     target = (firstseq + 1) % 16
 
                                     while len(seq_queue) > 0:
                                         if target in seq_queue:
+                                            # target이 있을 경우, target 다음 걸 찾기 위해 순회
                                             target = (target + 1) % 16
                                             remain -= len(file_queue[pop_count][4:])
                                             pop_count += 1
                                         else:
+                                            # target이 없을 경우 == 해당 패킷 누락 확인
                                             break
 
+                                    # pop_count 만큼 제대로 전송되었으므로,
+                                    # 그 횟수 만큼 파일 큐에서 pop 및 가능한 만큼 read
                                     file_queue = process_queue(f, pop_count, file_queue)
 
+                                    # 파일 큐가 비었을 경우, 송수신 종료
                                     if len(file_queue) == 0:
                                         break
 
+                                    # 보낼 파일큐가 준비 되었으므로, 전송 모드로 전환
                                     seq_queue = []
                                     count = 0
                                     send_mode = True
                                     print(f'switch to send mode, remain:{remain}')
-
-
-                            if DEBUG:
-                                print("receive from server")
 
                         except socket.timeout:
                             if remain == 0:
                                 print(f'[SUCCESS] \n')
                                 break
                             else:
+                                # client가 보낸 패킷이 누락되었을 경우, count 1 올리고 넘기기
                                 count += 1
-                                print(f'time out in 139\n')
+                                print(f'time out in receive\n')
                                 continue
                     print(f'\n[SUCCESS] {filename} send')
                     print(f'ready to listening\n')

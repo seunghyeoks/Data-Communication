@@ -5,7 +5,7 @@ import time
 FLAGS = _ = None
 DEBUG = False
 
-ipaddress = '172.16.98.134'  # 'localhost' or '172.16.98.134'
+ipaddress = 'localhost'  # 'localhost' or '172.16.98.134'
 port = 3034
 chunk_maxsize = 1500
 
@@ -33,7 +33,7 @@ def main():
         print(f'Unparsed arguments {_}')
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(7.0)
+    sock.settimeout(5.0)
     print(f'Ready to send using {sock}')
 
     while True:
@@ -41,10 +41,12 @@ def main():
         filename = ""
         size = 0
         try:
+            # 파일 크기 요청
             filename = input('Filename: ').strip()
             request = f'INFO {filename}'
             sock.sendto(request.encode('utf-8'), (FLAGS.address, FLAGS.port))
 
+            # 응답 처리 (크기 or 404)
             response, server = sock.recvfrom(FLAGS.chunk_maxsize)
             response = response.decode('utf-8')
             if response == '404 Not Found':
@@ -52,6 +54,7 @@ def main():
                 continue
             size = int(response)
 
+            # 파일 전송 요청
             request = f'DOWNLOAD {filename}'
             sock.sendto(request.encode('utf-8'), (FLAGS.address, FLAGS.port))
             print(f'[Request] {filename} to ({FLAGS.address}, {FLAGS.port})')
@@ -59,6 +62,7 @@ def main():
             remain = size
             prevseq = 1
             with open(filename, 'wb') as f:
+                # 속도 측정용 타이머 시작
                 stime = time.time()
                 while remain >= 0:
                     chunk, server = sock.recvfrom(FLAGS.chunk_maxsize)
