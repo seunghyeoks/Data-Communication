@@ -58,6 +58,7 @@ def main():
     remain = 0
 
     while True:
+        stack = 0
         try:
             data, client = sock.recvfrom(FLAGS.chunk_maxsize)
             data = data.decode('utf-8').strip().split()
@@ -122,6 +123,7 @@ def main():
                                     recvseq, client = sock.recvfrom(2)
                                     seq_queue.append(struct.unpack('>H', recvseq)[0])
 
+                                    stack = 0
                                     count += 1
                                     print(f'[receive] count:{count}/{len(file_queue)}, seq:{seq_queue[count-1]}')
 
@@ -159,8 +161,12 @@ def main():
                                     print(f'switch to send mode, remain:{remain}')
 
                         except socket.timeout:
+                            stack += 1
                             if remain == 0:
                                 print(f'[SUCCESS] \n')
+                                break
+                            elif stack > 10:  # 패킷 10 연속 누락, 클라이언트 이상으로 간주하고 탈출
+                                print(f'stack expired')
                                 break
                             else:
                                 # client가 보낸 패킷이 누락되었을 경우, count 1 올리고 넘기기

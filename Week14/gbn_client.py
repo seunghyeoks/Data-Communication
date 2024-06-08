@@ -37,6 +37,7 @@ def main():
     print(f'Ready to send using {sock}')
 
     while True:
+        retry_count = 0
         remain = 0
         filename = ""
         size = 0
@@ -73,6 +74,7 @@ def main():
                         print(f'[FAIL] invalid Seq {seq} received. RETRY')
                         # 이전에 보낸 응답이 누락, 이전 seq로 다시 응답
                         sock.sendto(struct.pack('>H', recentseq), (FLAGS.address, FLAGS.port))
+                        retry_count += 1
                         continue
 
                     # checksum 확인
@@ -81,6 +83,7 @@ def main():
                         print(f'[FAIL] invalid Checksum {checksum} received. RETRY')
                         # 받은 데이터의 오염, 이번 seq를 다시 보내 재전송 요청
                         sock.sendto(struct.pack('>H', recentseq), (FLAGS.address, FLAGS.port))
+                        retry_count += 1
                         continue
 
                     # data 저장 및 서버에 응답
