@@ -5,9 +5,9 @@ import time
 FLAGS = _ = None
 DEBUG = False
 
-ipaddress = '34.168.194.7'  # 'localhost' or '172.16.98.134'
+ipaddress = '172.16.98.134'  # 'localhost' or '172.16.98.134'
 port = 3034
-chunk_maxsize = 2 ** 16
+chunk_maxsize = 1500
 
 
 def calculate_checksum(data):
@@ -72,7 +72,7 @@ def main():
                         continue
 
                     # checksum 확인
-                    checksum = calculate_checksum(chunk[2:])
+                    checksum = calculate_checksum(chunk)
                     if checksum != 0:
                         print(f'[FAIL] invalid Checksum {checksum} received. RETRY')
                         # 받은 데이터의 오염, 이번 seq를 다시 보내 재전송 요청

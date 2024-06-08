@@ -1,12 +1,13 @@
 import socket
 import struct
+import os
 
 FLAGS = _ = None
 DEBUG = False
 
-ipaddress = '34.168.194.7'  # 'localhost' or '172.16.98.134'
+ipaddress = 'localhost'  # 'localhost' or '172.16.98.134'
 port = 3034
-chunk_maxsize = 2 ** 16
+chunk_maxsize = 1500
 
 
 def calculate_checksum(data):
@@ -32,68 +33,89 @@ def main():
         print(f'Unparsed arguments {_}')
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(7.0)
+    sock.bind((FLAGS.address, FLAGS.port))
+    sock.settimeout(1.0)
     print(f'Ready to send using {sock}')
 
     while True:
         remain = 0
         filename = ""
         try:
-            filename = input('Filename: ').strip()
-            request = f'INFO {filename}'
-            sock.sendto(request.encode('utf-8'), (FLAGS.address, FLAGS.port))
+            data, client = sock.recvfrom(FLAGS.chunk_maxsize)
+            data = data.decode('utf-8').strip().split()
+            print(f'Received {data} from {client}')
 
-            response, server = sock.recvfrom(FLAGS.chunk_maxsize)
-            response = response.decode('utf-8')
-            if response == '404 Not Found':
-                print(f'{response}\n')
+            # file 검색
+            command = str(data[0]).upper()
+            filename = data[1]
+
+            if not os.path.isfile(filename):
+                sock.sendto("404 Not Found".encode('utf-8'), client)
+                print(f'[404] {data[1]} Not Found\n')
                 continue
-            size = int(response)
 
-            request = f'DOWNLOAD {filename}'
-            sock.sendto(request.encode('utf-8'), (FLAGS.address, FLAGS.port))
-            print(f'[Request] {filename} to ({FLAGS.address}, {FLAGS.port})')
+            # 파일 사이즈 전송
+            if command == 'INFO':
+                file_size = os.path.getsize(filename)
+                sock.sendto(str(file_size).encode('utf-8'), client)
+                print(f'Send info {file_size} to {client}')
 
-            remain = size
-            prevseq = 1
-            with open(filename, 'wb') as f:
-                while remain >= 0:
-                    chunk, server = sock.recvfrom(FLAGS.chunk_maxsize)
+            # 파일 전송
+            if command == 'DOWNLOAD':
+                file_size = os.path.getsize(filename)
+                remain = file_size
 
-                    # seq 확인, H: unsigned Short
-                    seq = struct.unpack('>H', chunk[:2])[0]
-                    if prevseq == seq:
-                        print(f'[FAIL] invalid Seq {seq} received. RETRY')
-                        # 이전에 보낸 응답이 누락, 이전 seq로 다시 응답
-                        sock.sendto(struct.pack('>H', (seq + 1) % 2), (FLAGS.address, FLAGS.port))
+                prevseq = 0
+
+                with open(filename, 'rb') as f:
+                    seq = struct.pack('>H', 0)
+                    block = f.read(chunk_maxsize - 4)
+                    checksum = struct.pack('>H', calculate_checksum(seq + b'\x00\x00' + block))
+
+                    send_data = seq + checksum + block
+                    sock.sendto(send_data, client)
+
+                    while remain >= 0:
+                        try:
+                            recvseq, client = sock.recvfrom(FLAGS.chunk_maxsize)
+
+                            # seq 확인, H: unsigned Short
+                            seq = struct.unpack('>H', recvseq)[0]
+
+                            if prevseq == seq:
+                                print(f'[FAIL] invalid Seq {seq} received. RETRY')
+                                # 이전에 보낸 응답이 누락, 이전 seq로 다시 응답
+                                sock.sendto(send_data, client)
+                                continue
+
+                            if remain == 0:
+                                break
+                            remain -= len(block)
+
+
+                            prevseq = seq % 2
+                            seq = struct.pack('>H', seq)
+                            block = f.read(chunk_maxsize - 4)
+                            checksum = struct.pack('>H', calculate_checksum(seq + b'\x00\x00' + block))
+
+                            send_data = seq + checksum + block
+                            sock.sendto(send_data, client)
+
+                            print(f'[Send] Seq:{seq}\tProgress:{file_size - remain}/{file_size}')
+
+                        except socket.timeout:
+                            sock.sendto(send_data, client)
+                            continue
+
+                        if DEBUG:
+                            print("receive from server")
+
+                    if remain == 0:
+                        print(f'transfer success')
                         continue
-
-                    # checksum 확인
-                    checksum = calculate_checksum(chunk[2:])
-                    if checksum != 0:
-                        print(f'[FAIL] invalid Checksum {checksum} received. RETRY')
-                        # 받은 데이터의 오염, 이번 seq를 다시 보내 재전송 요청
-                        sock.sendto(struct.pack('>H', seq), (FLAGS.address, FLAGS.port))
-                        continue
-
-                    # data 저장 및 서버에 응답
-                    data = chunk[4:]
-                    remain -= len(data)
-                    print(f'[pass] Seq:{seq}\tChecksum:{checksum}\t  Progress:{size - remain}/{size}')
-
-                    f.write(data)
-                    prevseq = seq
-                    sock.sendto(struct.pack('>H', (seq + 1) % 2), (FLAGS.address, FLAGS.port))
-
-                    if DEBUG:
-                        print("receive from server")
 
 
         except socket.timeout:
-            if (remain != 0) | (filename == ""):
-                print(f'[Timed out] lost size {remain}\n')
-            else:
-                print(f'[SUCCESS] {filename} download SUCCESS\n')
             continue
 
         except KeyboardInterrupt:

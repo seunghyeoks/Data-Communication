@@ -51,7 +51,7 @@ def main():
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((FLAGS.address, FLAGS.port))
-    sock.settimeout(3.0)
+    sock.settimeout(1.0)
     print(f'Listening on {sock}')
 
     remain = 0
